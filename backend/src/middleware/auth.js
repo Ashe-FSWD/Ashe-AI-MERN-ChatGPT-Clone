@@ -1,4 +1,4 @@
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
 
 const requireAuth = (req, res, next) => {
   const authHeader = req.headers.authorization || "";
@@ -21,9 +21,8 @@ const requireAuth = (req, res, next) => {
     const payload = jwt.verify(token, secret);
 
     if (
-      !Number.isInteger(payload.userId) &&
-      typeof payload.userId !== "number" &&
-      typeof payload.userId !== "string"
+      !payload ||
+      (typeof payload.userId !== "number" && typeof payload.userId !== "string")
     ) {
       return res.status(401).json({
         success: false,
@@ -32,7 +31,7 @@ const requireAuth = (req, res, next) => {
     }
 
     req.user = { id: payload.userId };
-    next();
+    return next();
   } catch {
     return res.status(401).json({
       success: false,
@@ -41,4 +40,4 @@ const requireAuth = (req, res, next) => {
   }
 };
 
-module.exports = requireAuth;
+export default requireAuth;

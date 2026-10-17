@@ -1,17 +1,25 @@
-const {
+import {
   createConversationService,
   getConversationService,
   getChatsService,
-} = require("../service/chat.service");
+} from "../service/chat.service.js";
+// import {
+//   createConversationController,
+//   getConversationController,
+//   getChatsController,
+// } from "./controller/chat.controller.js";
 
-const createConversationController = async (req, res, next) => {
+export const createConversationController = async (req, res, next) => {
   try {
-    const { question, chatId } = req.body || {};
+    const { question, message, chatId } = req.body || {};
+    const prompt = typeof question === "string" ? question : message;
+    const files = req.files || [];
 
     const result = await createConversationService(
       req.user.id,
-      question,
+      prompt,
       chatId,
+      files,
     );
 
     res.status(201).json({
@@ -24,7 +32,7 @@ const createConversationController = async (req, res, next) => {
   }
 };
 
-const getConversationController = async (req, res, next) => {
+export const getConversationController = async (req, res, next) => {
   try {
     const conversations = await getConversationService(
       req.user.id,
@@ -40,7 +48,7 @@ const getConversationController = async (req, res, next) => {
   }
 };
 
-const getChatsController = async (req, res, next) => {
+export const getChatsController = async (req, res, next) => {
   try {
     const chats = await getChatsService(req.user.id);
 
@@ -51,10 +59,4 @@ const getChatsController = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-};
-
-module.exports = {
-  createConversationController,
-  getConversationController,
-  getChatsController,
 };

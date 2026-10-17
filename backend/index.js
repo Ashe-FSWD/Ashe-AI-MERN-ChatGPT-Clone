@@ -1,11 +1,11 @@
-require("dotenv/config");
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
 
-const express = require("express");
-const cors = require("cors");
-const db = require("./db/db.config");
-const mainRouter = require("./src/app/main.route");
-const logger = require("./src/middleware/logger");
-const errorHandler = require("./src/middleware/error-handler");
+import db from "./db/db.config.js";
+import mainRouter from "./src/app/main.route.js";
+import logger from "./src/middleware/logger.js";
+import errorHandler from "./src/middleware/error-handler.js";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3777;

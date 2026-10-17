@@ -1,9 +1,9 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const db = require("../../../db/db.config");
+import express from "express";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import db from "../../../db/db.config.js";
 
-const router = express.Router();
+const authRouter = express.Router();
 
 const createToken = (user) => {
   const secret = process.env.JWT_SECRET;
@@ -12,10 +12,12 @@ const createToken = (user) => {
     throw new Error("JWT_SECRET is not configured.");
   }
 
-  return jwt.sign({ userId: user.id }, secret, { expiresIn: "1d" });
+  return jwt.sign({ userId: user.id }, secret, {
+    expiresIn: "1d",
+  });
 };
 
-router.post("/register", async (req, res, next) => {
+authRouter.post("/register", async (req, res, next) => {
   try {
     const { name, email, password } = req.body || {};
 
@@ -89,7 +91,7 @@ router.post("/register", async (req, res, next) => {
   }
 });
 
-router.post("/login", async (req, res, next) => {
+authRouter.post("/login", async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
 
@@ -106,7 +108,10 @@ router.post("/login", async (req, res, next) => {
     }
 
     const [rows] = await db.execute(
-      "SELECT id, name, email, password_hash FROM users WHERE email = ? LIMIT 1",
+      `SELECT id, name, email, password_hash
+       FROM users
+       WHERE email = ?
+       LIMIT 1`,
       [email.trim().toLowerCase()],
     );
 
@@ -137,4 +142,4 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default authRouter;

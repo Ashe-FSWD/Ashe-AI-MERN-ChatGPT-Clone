@@ -1,11 +1,11 @@
-const express = require("express");
+import express from "express";
 
-const chatRouter = require("../api/chat/chat.route");
-const authRouter = require("../api/auth/auth.route");
+import chatRouter from "../api/chat/chat.route.js";
+import authRouter from "../api/auth/auth.route.js";
 
-const mainRouter = express.Router();
+const router = express.Router();
 
-mainRouter.use("/auth", authRouter);
-mainRouter.use("/chat", chatRouter);
+router.use("/auth", authRouter);
+router.use("/chat", chatRouter);
 
-module.exports = mainRouter;
+export default router;

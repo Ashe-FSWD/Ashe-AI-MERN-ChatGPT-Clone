@@ -1,6 +1,6 @@
+-- Run this script after selecting your Aiven MySQL database (for example, defaultdb).
+-- The database itself is created/selected in the Aiven console; do not CREATE DATABASE here.
 
-CREATE DATABASE IF NOT EXISTS `gpt-clone`;
-USE `gpt-clone`;
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

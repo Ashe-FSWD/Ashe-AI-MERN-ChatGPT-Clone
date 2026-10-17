@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: gpt-clone-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: CORS_ORIGINS
+        sync: false
+
+      - key: DB_HOST
+        sync: false
+
+      - key: DB_PORT
+        sync: false
+
+      - key: DB_USER
+        sync: false
+
+      - key: DB_PASSWORD
+        sync: false
+
+      - key: DB_NAME
+        sync: false
+
+      - key: DB_SSL
+        value: "true"
+
+      - key: DB_SSL_CA_PATH
+        sync: false
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: GEMINI_API_KEY
+        sync: false
+
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash

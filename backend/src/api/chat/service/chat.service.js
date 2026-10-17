@@ -1,8 +1,89 @@
-const db = require("../../../../db/db.config");
-const { geminiClient, geminiModel } = require("../../../utils/gemini");
-const SYSTEM_PROMPT = require("../../../utils/system-prompt");
+import db from "../../../../db/db.config.js";
+import { geminiClient, geminiModel } from "../../../utils/gemini.js";
+import SYSTEM_PROMPT from "../../../utils/system-prompt.js";
+import mammoth from "mammoth";
 
-const formatConversation = (row) => ({
+const TEXT_MIME_TYPES = new Set(["text/plain", "text/markdown", "text/csv"]);
+
+const IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+
+const MAX_EXTRACTED_TEXT = 100000;
+const MAX_QUESTION_LENGTH = 10000;
+
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+const SUPPORTED_MIME_TYPES = new Set([
+  ...TEXT_MIME_TYPES,
+  ...IMAGE_MIME_TYPES,
+  "application/pdf",
+  DOCX_MIME_TYPE,
+]);
+
+const attachmentToPart = async (file) => {
+  const name = String(file.originalname || "attachment").replace(
+    /[\r\n]/g,
+    "_",
+  );
+
+  const mime = String(file.mimetype || "").toLowerCase();
+
+  if (!file.buffer || !Buffer.isBuffer(file.buffer)) {
+    const error = new Error(`Invalid attachment data: ${name}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!SUPPORTED_MIME_TYPES.has(mime)) {
+    const error = new Error(`Unsupported file type: ${name}`);
+    error.statusCode = 415;
+    throw error;
+  }
+
+  // Images and PDFs are sent to Gemini as inline data.
+  if (IMAGE_MIME_TYPES.has(mime) || mime === "application/pdf") {
+    return {
+      inlineData: {
+        mimeType: mime,
+        data: file.buffer.toString("base64"),
+      },
+    };
+  }
+
+  // Plain text, Markdown and CSV files are extracted in memory.
+  if (TEXT_MIME_TYPES.has(mime)) {
+    const text = file.buffer.toString("utf8").slice(0, MAX_EXTRACTED_TEXT);
+
+    return {
+      text: `\n\n[Attachment: ${name}]\n${text}`,
+    };
+  }
+
+  // Extract text from Word documents in memory.
+  if (mime === DOCX_MIME_TYPE) {
+    const result = await mammoth.extractRawText({
+      buffer: file.buffer,
+    });
+
+    return {
+      text: `\n\n[Attachment: ${name}]\n${result.value.slice(
+        0,
+        MAX_EXTRACTED_TEXT,
+      )}`,
+    };
+  }
+
+  const error = new Error(`Unsupported file type: ${name}`);
+  error.statusCode = 415;
+  throw error;
+};
+
+export const formatConversation = (row) => ({
   id: row.id,
   chatId: row.chat_id,
   role: row.role,
@@ -11,7 +92,7 @@ const formatConversation = (row) => ({
   createdAt: row.created_at,
 });
 
-const getChatsService = async (userId) => {
+export const getChatsService = async (userId) => {
   const [rows] = await db.execute(
     `SELECT id, title, created_at, updated_at
      FROM chats
@@ -23,7 +104,7 @@ const getChatsService = async (userId) => {
   return rows;
 };
 
-const getConversationService = async (userId, chatId) => {
+export const getConversationService = async (userId, chatId) => {
   if (!chatId) {
     const [rows] = await db.execute(
       `SELECT m.id, m.chat_id, m.role, m.content,
@@ -62,20 +143,52 @@ const getConversationService = async (userId, chatId) => {
   return rows.reverse().map(formatConversation);
 };
 
-const createConversationService = async (userId, question, requestedChatId) => {
-  if (typeof question !== "string" || !question.trim()) {
-    const error = new Error("question is required");
+export const createConversationService = async (
+  userId,
+  question,
+  requestedChatId,
+  files = [],
+) => {
+  if (!Array.isArray(files)) {
+    const error = new Error("Invalid attachments.");
     error.statusCode = 400;
     throw error;
   }
 
-  const normalizedQuestion = question.trim();
-
-  if (normalizedQuestion.length > 10000) {
-    const error = new Error("Question is too long.");
+  if (
+    (typeof question !== "string" || !question.trim()) &&
+    files.length === 0
+  ) {
+    const error = new Error(
+      "A question or at least one attachment is required.",
+    );
     error.statusCode = 400;
     throw error;
   }
+
+  const normalizedQuestion =
+    typeof question === "string" ? question.trim() : "";
+
+  if (normalizedQuestion.length > MAX_QUESTION_LENGTH) {
+    const error = new Error("Question must be 10000 characters or fewer.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const promptQuestion =
+    normalizedQuestion ||
+    "Please analyze the attached file(s) and summarize the key information.";
+
+  const attachmentNames = files.map((file) =>
+    String(file.originalname || "attachment").replace(/[\r\n]/g, "_"),
+  );
+
+  const savedQuestion = [
+    promptQuestion,
+    attachmentNames.length
+      ? `\n\nAttachments: ${attachmentNames.join(", ")}`
+      : "",
+  ].join("");
 
   let chatId = requestedChatId;
   let isNewChat = false;
@@ -92,7 +205,7 @@ const createConversationService = async (userId, question, requestedChatId) => {
       throw error;
     }
   } else {
-    const title = normalizedQuestion.slice(0, 200);
+    const title = promptQuestion.slice(0, 200);
 
     const [createdChat] = await db.execute(
       "INSERT INTO chats (user_id, title) VALUES (?, ?)",
@@ -104,6 +217,7 @@ const createConversationService = async (userId, question, requestedChatId) => {
   }
 
   try {
+    // Preserve the existing behavior of using the most recent 10 messages.
     const [historyRows] = await db.execute(
       `SELECT role, content
        FROM messages
@@ -120,15 +234,24 @@ const createConversationService = async (userId, question, requestedChatId) => {
       parts: [{ text: message.content }],
     }));
 
+    // Include the user's question and each uploaded attachment in this turn.
+    const userParts = [{ text: promptQuestion }];
+
+    for (const file of files) {
+      userParts.push(await attachmentToPart(file));
+    }
+
     contents.push({
       role: "user",
-      parts: [{ text: normalizedQuestion }],
+      parts: userParts,
     });
 
     const response = await geminiClient.models.generateContent({
       model: geminiModel,
       contents,
-      config: { systemInstruction: SYSTEM_PROMPT },
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+      },
     });
 
     const rawAnswer =
@@ -137,7 +260,9 @@ const createConversationService = async (userId, question, requestedChatId) => {
     const answer = typeof rawAnswer === "string" ? rawAnswer.trim() : "";
 
     if (!answer) {
-      throw new Error("The AI returned an empty response.");
+      const error = new Error("The AI returned an empty response.");
+      error.statusCode = 502;
+      throw error;
     }
 
     const tokenCount = response.usageMetadata?.totalTokenCount || 0;
@@ -150,7 +275,7 @@ const createConversationService = async (userId, question, requestedChatId) => {
       const [userInsert] = await connection.execute(
         `INSERT INTO messages (chat_id, role, content, token_count)
          VALUES (?, 'user', ?, 0)`,
-        [chatId, normalizedQuestion],
+        [chatId, savedQuestion],
       );
 
       const [assistantInsert] = await connection.execute(
@@ -160,7 +285,9 @@ const createConversationService = async (userId, question, requestedChatId) => {
       );
 
       await connection.execute(
-        "UPDATE chats SET updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+        `UPDATE chats
+         SET updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND user_id = ?`,
         [chatId, userId],
       );
 
@@ -195,8 +322,7 @@ const createConversationService = async (userId, question, requestedChatId) => {
       connection.release();
     }
   } catch (error) {
-    // If we created a new, empty chat but the AI request failed,
-    // remove that unused chat. Existing chats are left intact.
+    // Remove a newly created empty chat if processing failed.
     if (isNewChat) {
       await db
         .execute("DELETE FROM chats WHERE id = ? AND user_id = ?", [
@@ -208,11 +334,4 @@ const createConversationService = async (userId, question, requestedChatId) => {
 
     throw error;
   }
-};
-
-module.exports = {
-  getChatsService,
-  getConversationService,
-  createConversationService,
-  formatConversation,
 };

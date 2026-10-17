@@ -54,6 +54,7 @@ export default function App() {
 
     const items = result.data?.chats ?? [];
     setChats(items);
+
     return items;
   }, []);
 
@@ -122,23 +123,40 @@ export default function App() {
     setError("");
   };
 
-  const handleSendMessage = async (question) => {
-    if (!question?.trim() || isLoading || isLoadingHistory) {
+  // UPDATED: accepts files as the second argument.
+  const handleSendMessage = async (question, files = []) => {
+    const message = typeof question === "string" ? question.trim() : "";
+    const attachments = Array.from(files || []);
+
+    if (
+      (!message && attachments.length === 0) ||
+      isLoading ||
+      isLoadingHistory
+    ) {
       return false;
     }
 
     const tempId = `temp-${Date.now()}`;
 
-    setConversations((previous) => [
-      ...previous,
-      { id: tempId, role: "user", content: question },
-    ]);
+    // Show the user's text immediately.
+    if (message) {
+      setConversations((previous) => [
+        ...previous,
+        {
+          id: tempId,
+          role: "user",
+          content: message,
+        },
+      ]);
+    }
 
     setIsLoading(true);
     setError("");
 
     try {
-      const result = await sendMessage(question, activeChatId);
+      // UPDATED: forward files with the existing chat ID.
+      // chatApi.js must send these using FormData.
+      const result = await sendMessage(message, activeChatId, attachments);
 
       const data = result?.data;
 
@@ -148,13 +166,15 @@ export default function App() {
         !data?.userConversation ||
         !data?.assistantConversation
       ) {
-        throw new Error("The server returned an invalid chat response.");
+        throw new Error(
+          result?.message || "The server returned an invalid chat response.",
+        );
       }
 
       setActiveChatId(data.chatId);
 
       setConversations((previous) => [
-        ...previous.filter((message) => message.id !== tempId),
+        ...previous.filter((item) => item.id !== tempId),
         data.userConversation,
         data.assistantConversation,
       ]);
@@ -163,8 +183,9 @@ export default function App() {
 
       return true;
     } catch (err) {
+      // Remove the temporary message if sending fails.
       setConversations((previous) =>
-        previous.filter((message) => message.id !== tempId),
+        previous.filter((item) => item.id !== tempId),
       );
 
       if (err?.response?.status === 401) {
@@ -180,7 +201,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [conversations, isLoading]);
 
   if (!user) {
@@ -204,6 +227,7 @@ export default function App() {
         {error && (
           <div className="error-banner" role="alert">
             <span>{error}</span>
+
             <button
               type="button"
               className="error-banner__retry"

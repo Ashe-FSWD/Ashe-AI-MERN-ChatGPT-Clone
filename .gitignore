@@ -1,4 +1,4 @@
-# Secrets and local environment files
+# Environment files and secrets
 .env
 .env.*
 !.env.example
@@ -6,7 +6,7 @@
 **/.env.*
 !**/.env.example
 
-# Dependencies and build output
+# Dependencies and generated files
 node_modules/
 **/node_modules/
 dist/

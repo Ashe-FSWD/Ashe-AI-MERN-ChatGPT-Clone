@@ -60,3 +60,80 @@
 .submitBtn:hover:not(:disabled) {
   opacity: 0.8;
 }
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  font-size: 12px;
+}
+
+.thumbnail {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.removeFile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.fileError {
+  margin: 0 0 8px;
+  color: #ef7373;
+  font-size: 13px;
+}
+
+.form > button.icon {
+  border: 0;
+  background: transparent;
+}
+
+.form > button.icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
