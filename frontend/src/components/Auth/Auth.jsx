@@ -8,10 +8,12 @@ export default function Auth({ onAuthenticated }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState(""); // Optional: to notify user
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
+    setSuccessMessage("");
 
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -23,10 +25,24 @@ export default function Auth({ onAuthenticated }) {
     setLoading(true);
 
     try {
-      const result =
-        mode === "register"
-          ? await register(name.trim(), normalizedEmail, password)
-          : await login(normalizedEmail, password);
+      if (mode === "register") {
+        const result = await register(name.trim(), normalizedEmail, password);
+
+        if (!result?.success) {
+          throw new Error(
+            "The server returned an invalid registration response.",
+          );
+        }
+
+        // Redirect to sign in instead of auto-logging in
+        setMode("login");
+        setPassword(""); // Clear password for security
+        setSuccessMessage("Account created successfully! Please sign in.");
+        return;
+      }
+
+      // Login logic
+      const result = await login(normalizedEmail, password);
 
       const token = result?.data?.token;
       const user = result?.data?.user;
@@ -55,7 +71,7 @@ export default function Auth({ onAuthenticated }) {
     width: "100%",
     padding: "12px",
     marginTop: "6px",
-    border: "1px solid #444",
+    border: "1.5px solid #444",
     borderRadius: "8px",
     background: "#252525",
     color: "#fff",
@@ -89,8 +105,19 @@ export default function Auth({ onAuthenticated }) {
         <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
 
         <p style={{ color: "#aaa", lineHeight: 1.5 }}>
-          Sign in to access your own private conversations.
+          {mode === "login"
+            ? "Sign in to access your own private conversations."
+            : "Sign up to create your new account."}
         </p>
+
+        {successMessage && (
+          <p
+            role="status"
+            style={{ color: "#86efac", fontSize: "14px", marginTop: "10px" }}
+          >
+            {successMessage}
+          </p>
+        )}
 
         {mode === "register" && (
           <label style={{ display: "block", marginTop: "18px" }}>
@@ -136,7 +163,10 @@ export default function Auth({ onAuthenticated }) {
         </label>
 
         {error && (
-          <p role="alert" style={{ color: "#fca5a5", fontSize: "14px" }}>
+          <p
+            role="alert"
+            style={{ color: "#fca5a5", fontSize: "14px", marginTop: "10px" }}
+          >
             {error}
           </p>
         )}
@@ -163,13 +193,21 @@ export default function Auth({ onAuthenticated }) {
               : "Create account"}
         </button>
 
-        <p style={{ textAlign: "center", color: "#aaa", fontSize: "14px" }}>
+        <p
+          style={{
+            textAlign: "center",
+            color: "#aaa",
+            fontSize: "14px",
+            marginTop: "20px",
+          }}
+        >
           {mode === "login" ? "New here? " : "Already registered? "}
           <button
             type="button"
             onClick={() => {
               setMode(mode === "login" ? "register" : "login");
               setError("");
+              setSuccessMessage("");
             }}
             style={{
               color: "#fff",
